@@ -19,7 +19,7 @@ export function GeminiSettings({ config, configError, onRefresh, onNotice }: { c
    const r = await studioFetch('/api/key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, model }) });
    const body = await r.json() as { error?: string };
    if (!r.ok) throw new Error(body.error || 'เชื่อมต่อไม่สำเร็จ');
-   await onRefresh(); setMessage(staticMode ? 'เชื่อม Gemini แล้ว คีย์อยู่เฉพาะแท็บนี้ รีเฟรชหรือปิดแท็บต้องกรอกใหม่' : 'เชื่อม Gemini แล้ว ใช้ได้เฉพาะเบราว์เซอร์นี้ 8 ชั่วโมง'); onNotice('Gemini พร้อมสร้างเรื่องแล้ว');
+   await onRefresh(); setMessage(staticMode ? 'เชื่อม Gemini แล้ว คีย์อยู่เฉพาะแท็บนี้ รีเฟรชหรือปิดแท็บต้องกรอกใหม่' : 'เชื่อม Gemini แล้ว ใช้ได้เฉพาะเบราว์เซอร์นี้ 8 ชั่วโมง'); onNotice('ตรวจคีย์และโมเดลผ่านแล้ว พร้อมลองสร้างเรื่อง');
   } catch (e) { setMessage((e as Error).message); }
   finally { if (input.current) input.current.value = ''; setBusy(false); }
  }
@@ -33,7 +33,7 @@ export function GeminiSettings({ config, configError, onRefresh, onNotice }: { c
   finally { setBusy(false); }
  }
  return <>
-  <div className={`connection-summary ${config?.connected ? 'connected' : ''}`}><Sparkles size={27}/><div><h3>{configError ? 'ยังตรวจการเชื่อมต่อไม่ได้' : config?.connected ? 'Gemini พร้อมสร้างเรื่อง' : 'เชื่อม Gemini ของคุณ'}</h3><p>{config?.model || 'กำลังตรวจโมเดล'}</p></div></div>
+  <div className={`connection-summary ${config?.connected ? 'connected' : ''}`}><Sparkles size={27}/><div><h3>{configError ? 'ยังตรวจการเชื่อมต่อไม่ได้' : config?.connected ? 'ตรวจคีย์และโมเดลผ่านแล้ว' : 'เชื่อม Gemini ของคุณ'}</h3><p>{config?.model || 'กำลังตรวจโมเดล'}</p></div></div>
   <p className="modal-intro">ใส่คีย์จาก Google AI Studio ในช่องนี้ ใช้สำหรับวิเคราะห์เพลงและวางเรื่อง ระบบจะไม่สลับไปใช้บริการอื่นเอง</p>
   <form onSubmit={e => { e.preventDefault(); void connect(); }}>
    <label className="field"><span>Gemini API key</span><input ref={input} type="password" autoComplete="off" spellCheck={false} disabled={busy} placeholder="วางคีย์ของคุณที่นี่" maxLength={512} aria-label="Gemini API key"/><small>คีย์ไม่ถูกแสดงกลับ ไม่บันทึกในโปรเจกต์ และไม่รวมใน GitHub</small></label>
