@@ -10,7 +10,7 @@ export async function portableProject(p: Project) {
     async function asset(a: Asset | undefined) { if (!a)
         return undefined; return { ...a, blob: undefined, data: await dataUrl(a.blob) }; }
     const characters = await Promise.all(p.characters.map(async (c) => ({ ...c, references: await Promise.all(c.references.map(asset)) })));
-    const scenes = await Promise.all(p.scenes.map(async (s) => ({ ...s, media: await asset(s.media) })));
+    const scenes = await Promise.all(p.scenes.map(async (s) => ({ ...s, media: await asset(s.media), klingFrame: await asset(s.klingFrame) })));
     return { format: 'storycraft-project', version: 1, project: { ...p, audio: await asset(p.audio), characters, scenes } };
 }
 export async function importProject(text: string): Promise<Project> { const raw = JSON.parse(text); if (raw.format !== 'storycraft-project' || raw.version !== 1 || !raw.project)
@@ -27,6 +27,8 @@ export async function importProject(text: string): Promise<Project> { const raw 
     if (!Number.isFinite(s.duration) || s.duration <= 0 || s.duration > 60 || !Array.isArray(s.characterIds))
         throw new Error('ข้อมูลช็อตไม่ถูกต้อง');
     s.media = await asset(s.media);
+    s.klingFrame = await asset(s.klingFrame);
+    if(s.kling && (typeof s.kling.external !== "string" || !/^storycraft-[a-f0-9-]{36}$/.test(s.kling.external) || typeof s.kling.backend !== "string")) throw new Error("เลขงาน Kling ในโปรเจกต์ไม่ถูกต้อง");
     s.review = 'pending';
     s.checked = [];
 } return { ...p, id: crypto.randomUUID(), updatedAt: Date.now(), createdAt: Date.now() }; }

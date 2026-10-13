@@ -17,7 +17,10 @@ export type Character = {
     locked: boolean;
     references: Asset[];
 };
+export type KlingJob = { external: string; backend: string; status: string; sourceHash: string; createdAt: number; id?: string; videoUrl?: string; message?: string; billing?: string };
 export type Scene = {
+    kling?: KlingJob;
+    klingFrame?: Asset;
     id: string;
     title: string;
     duration: number;
