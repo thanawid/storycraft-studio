@@ -36,7 +36,7 @@ export async function generateStory(p: Project, media: {
     if (response.status >= 500)
         throw new GeminiServiceError(`Google Gemini มีปัญหาฝั่งบริการชั่วคราว (${response.status}) กรุณารอแล้วลองใหม่`, response.status, 15);
     if (response.status === 429)
-        throw new Error('โควตา Gemini เต็มหรือเรียกถี่เกินไป กรุณารอสักครู่ ระบบจะไม่เปลี่ยนไปใช้โมเดลเสียเงินอัตโนมัติ');
+        throw new GeminiServiceError('Gemini ตอบ 429: โควตาเต็มหรือเรียกถี่เกินไป ตรวจโควตาของโมเดลใน Google AI Studio ก่อนลองใหม่ การเปลี่ยนคีย์ในโปรเจกต์เดิมอาจไม่เพิ่มโควตา ระบบไม่ส่งซ้ำหรือสลับโมเดลอัตโนมัติ', 429, 60);
     if (response.status === 401 || response.status === 403)
         throw new Error('Gemini key ไม่มีสิทธิ์ใช้งาน กรุณาตรวจคีย์และการเชื่อมต่อใน Google AI Studio');
     if (response.status === 404)

@@ -1,23 +1,18 @@
 import { CHECKS, IDENTITY_LOCK, NEGATIVE, type Project, type Scene } from './story.ts';
 import { dataUrl } from './storage.ts';
-let endpoint = '';
-let token = '';
-export function klingConnected() { return !!token; }
-export function disconnectKling() { endpoint=''; token=''; }
-export async function connectKling(url: string, password: string) {
- const parsed = new URL(url.trim());
- if (parsed.protocol!=='https:' || !parsed.hostname.endsWith('.workers.dev') || parsed.username || parsed.password || parsed.pathname!=='/' || parsed.search || parsed.hash) throw new Error('ใช้ URL https://ชื่อ-worker.ชื่อบัญชี.workers.dev เท่านั้น');
- const r=await fetch(parsed.origin+'/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password}),signal:AbortSignal.timeout(15000)});
- const b=await r.json(); if (!r.ok || typeof b.token!=='string') throw new Error(b.error||'เชื่อมหลังบ้านไม่ได้');
- endpoint=parsed.origin; token=b.token;
- return endpoint;
+import { loginOwner, ownerSession, ownerFetch } from './owner-session.ts';
+export function klingConnected() { return ownerSession.connected(); }
+export function disconnectKling() { ownerSession.disconnect(); }
+export async function connectKling(url: string, password: string, remember = true) {
+ await loginOwner(url,password,remember);
+ return ownerSession.endpoint();
 }
 export async function klingRequest(path: string, body?: unknown, backend?: string) {
- if (!token || (backend && backend!==endpoint)) throw new Error('เปิดการเชื่อมต่อ AI แล้วเชื่อม Worker เดิมด้วยรหัสเจ้าของก่อน');
- const r=await fetch(endpoint+path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${token}`, ...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(35000)});
- const b=await r.json(); if (!r.ok) { if(r.status===401) token=''; throw new Error(b.error||'Kling ไม่ตอบกลับ'); } return b.data;
+ if (!ownerSession.connected() || (backend && backend!==ownerSession.endpoint())) throw new Error('เปิดการเชื่อมต่อ AI แล้วเข้าสู่ระบบหลังบ้านเดิมก่อน');
+ const r=await ownerFetch(path,{method:body?'POST':'GET',...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});
+ const b=await r.json(); if(!r.ok)throw new Error(b.error||'Kling ไม่ตอบกลับ');return b.data;
 }
-export function klingEndpoint() { return endpoint; }
+export function klingEndpoint() { return ownerSession.connected()?ownerSession.endpoint():''; }
 export async function prepareKling(p: Project,s: Scene) {
  if (!p.styleLocked || s.review!=='approved' || !CHECKS.every(c=>s.checked.includes(c))) throw new Error('ล็อกสไตล์ และตรวจภาพเริ่มให้ผ่านทุกข้อก่อน');
  if (![5,10].includes(s.duration)) throw new Error('Kling รุ่นนี้รับ 5 หรือ 10 วินาที กรุณาแก้ความยาวช็อตแล้วตรวจภาพใหม่');

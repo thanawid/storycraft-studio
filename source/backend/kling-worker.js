@@ -1,3 +1,4 @@
+import { createStaticApi } from '../lib/story-api.ts';
 // Cloudflare Worker module. Set secrets in Cloudflare, never put their values here.
 const API = 'https://api-singapore.klingai.com';
 const enc = new TextEncoder();
@@ -12,25 +13,38 @@ async function equal(a,b) {
 }
 export default { async fetch(request, env) {
  const origin = request.headers.get('Origin');
- const headers = {'Content-Type':'application/json','Cache-Control':'no-store','Access-Control-Allow-Origin':env.ALLOWED_ORIGIN || 'https://thanawid.github.io','Vary':'Origin','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization'};
+ const headers = {'Content-Type':'application/json','Cache-Control':'no-store','Access-Control-Allow-Origin':env.ALLOWED_ORIGIN || 'https://thanawid.github.io','Vary':'Origin','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization','Access-Control-Expose-Headers':'X-StoryCraft-Session'};
  const reply = (body,status=200)=>new Response(JSON.stringify(body),{status,headers});
  if (origin !== headers['Access-Control-Allow-Origin']) return reply({error:'Origin not allowed'},403);
  if (request.method==='OPTIONS') return new Response(null,{status:204,headers});
- if (!env.KLING_API_KEY || !env.STUDIO_PASSWORD || env.STUDIO_PASSWORD.length<24) return reply({error:'ตั้ง KLING_API_KEY และ STUDIO_PASSWORD (อย่างน้อย 24 ตัว) ใน Cloudflare Secrets ก่อน'},503);
+ if (!env.STUDIO_PASSWORD || env.STUDIO_PASSWORD.length<16) return reply({error:'ตั้ง STUDIO_PASSWORD (อย่างน้อย 16 ตัว) ใน Cloudflare Secrets ก่อน'},503);
  try {
   const url = new URL(request.url);
   if (url.pathname==='/session' && request.method==='POST') {
    if (Number(request.headers.get('Content-Length'))>2048) return reply({error:'Request too large'},413);
    const body = await request.text(); if (body.length>2048) return reply({error:'Request too large'},413);
-   const {password} = JSON.parse(body);
+   const {password, remember} = JSON.parse(body);
    if (typeof password!=='string' || !(await equal(password,env.STUDIO_PASSWORD))) return reply({error:'รหัสเจ้าของไม่ถูกต้อง'},401);
-   const payload = `${Math.floor(Date.now()/1000)+3600}.${crypto.randomUUID()}`;
+   const ttl = remember===true ? 7*24*3600 : 3600;
+   const payload = `${Math.floor(Date.now()/1000)+ttl}.${crypto.randomUUID()}`;
    return reply({token:`${payload}.${await signature(payload,env.STUDIO_PASSWORD)}`});
   }
   const token = (request.headers.get('Authorization')||'').replace(/^Bearer /,'');
   const parts = token.split('.'); const payload = parts.slice(0,2).join('.');
-  if (parts.length!==3 || !Number.isFinite(Number(parts[0])) || Number(parts[0])<=Date.now()/1000 || !(await equal(parts[2],await signature(payload,env.STUDIO_PASSWORD)))) return reply({error:'กรุณาเชื่อมต่อด้วยรหัสเจ้าของอีกครั้ง'},401);
-  if (url.pathname==='/status' && request.method==='GET') return reply({configured:true});
+  if (parts.length!==3 || !Number.isFinite(Number(parts[0])) || Number(parts[0])<=Date.now()/1000 || !(await equal(parts[2],await signature(payload,env.STUDIO_PASSWORD)))) {headers['X-StoryCraft-Session']='expired';return reply({error:'เซสชันหมดอายุ กรุณาเข้าสู่ระบบเจ้าของอีกครั้ง'},401);}
+  if ((url.pathname==='/status'||url.pathname==='/api/config') && request.method==='GET') return reply({version:'1.5.0',configured:true,ownerConnected:true,connected:!!env.GEMINI_API_KEY,klingConfigured:!!env.KLING_API_KEY,serverMode:true,source:env.GEMINI_API_KEY?'server':null,model:env.GEMINI_MODEL||'gemini-3.8-flash',sessionEnabled:true});
+  if(url.pathname==='/api/check' && request.method==='GET') {
+   if(!env.GEMINI_API_KEY)return reply({error:'ยังไม่ได้ตั้ง GEMINI_API_KEY'},503);
+   const model=env.GEMINI_MODEL||'gemini-3.8-flash';if(!/^gemini-[a-z0-9.-]+$/.test(model))return reply({error:'GEMINI_MODEL ไม่ถูกต้อง'},400);
+   const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}`,{headers:{'x-goog-api-key':env.GEMINI_API_KEY},signal:AbortSignal.timeout(15000)});
+   return reply({verified:r.ok,message:r.ok?'คีย์และสิทธิ์โมเดลผ่าน ยังไม่ได้ทดสอบสร้างเรื่องหรือวัดโควตา':`Google ตอบ ${r.status} ตรวจคีย์ สิทธิ์โมเดล และโควตาใน AI Studio`},r.ok?200:r.status);
+  }
+  if(url.pathname==='/api/story'||url.pathname==='/api/key') {
+   const handler=createStaticApi(fetch,{key:env.GEMINI_API_KEY,model:env.GEMINI_MODEL||'gemini-3.8-flash',server:true});
+   const response=await handler(request);const wrapped=new Response(response.body,{status:response.status,headers:response.headers});
+   for(const [k,v] of Object.entries(headers))wrapped.headers.set(k,v);return wrapped;
+  }
+  if (!env.KLING_API_KEY) return reply({error:'เพิ่ม KLING_API_KEY ใน Cloudflare Secrets ก่อน'},503);
   let path, init;
   if (url.pathname==='/jobs' && request.method==='GET') {
    const external = url.searchParams.get('external');
@@ -47,7 +61,7 @@ export default { async fetch(request, env) {
   // Exactly one upstream call. Never automatically retry a paid POST.
   const response = await fetch(API+path,{...init,headers:{Authorization:`Bearer ${env.KLING_API_KEY}`,'Content-Type':'application/json'},signal:AbortSignal.timeout(25000),redirect:'error'});
   const data = await response.json();
-  if (!response.ok || data.code!==0) return reply({error:String(data.message||'Kling ปฏิเสธคำขอ'),code:data.code},response.ok?502:response.status);
+  if (!response.ok || data.code!==0) return reply({error:String(data.message||'Kling ปฏิเสธคำขอ').replaceAll(env.KLING_API_KEY,'[hidden]'),code:data.code},response.ok?502:response.status);
   return reply({data:data.data});
  } catch { return reply({error:'เชื่อม Kling ไม่สำเร็จ หากกดสร้างแล้ว ให้ตรวจสถานะงานเดิมก่อน อย่ากดส่งซ้ำ'},502); }
 }};

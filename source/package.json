@@ -1,6 +1,6 @@
 {
   "name": "storycraft-studio-github-pages",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,7 +10,8 @@
     "dev": "vite --config vite.github.config.ts",
     "build": "vite build --config vite.github.config.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "build:worker": "node build-worker.mjs"
   },
   "dependencies": {
     "react": "19.2.6",
