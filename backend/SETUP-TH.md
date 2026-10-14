@@ -1,5 +1,5 @@
 # StoryCraft Studio — ตั้งคีย์ครั้งเดียว ใช้ต่อได้
-> เว็บ 1.6.0 ใช้ Worker 1.5.0 เดิมได้ หากอัปเดตหลังบ้านรุ่นนั้นแล้ว ให้อัปโหลดเฉพาะ index.html, assets และ storycraft-icon.svg
+> เว็บ 1.7.0 ต้องอัปเดต Worker ด้วย เพื่อเพิ่ม /api/concepts ใช้ Secrets เดิม ไม่ต้องกรอกคีย์ใหม่
 
 
 เว็บหลัก: https://thanawid.github.io/storycraft-studio/

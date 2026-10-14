@@ -1,3 +1,4 @@
+import { parseConcepts } from './planning.ts';
 import type { Project, Asset } from './story';
 const DB = 'storycraft-studio-v1';
 function db(): Promise<IDBDatabase> { return new Promise((resolve, reject) => { const r = indexedDB.open(DB, 1); r.onupgradeneeded = () => r.result.createObjectStore('projects', { keyPath: 'id' }); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(new Error('ไม่สามารถเปิดพื้นที่บันทึกในเบราว์เซอร์นี้ได้')); }); }
@@ -19,7 +20,10 @@ export async function importProject(text: string): Promise<Project> { const raw 
     return undefined; if (typeof a.data !== 'string' || !/^data:(image\/(png|jpeg|webp)|audio\/[\w.+-]+|video\/(mp4|webm));base64,/.test(a.data))
     throw new Error('ชนิดไฟล์ในโปรเจกต์ไม่รองรับ'); const match = a.data.match(/^data:([^;]+);base64,(.*)$/s)!; const binary = atob(match[2]); const bytes = new Uint8Array(binary.length); for (let i = 0; i < binary.length; i++)
     bytes[i] = binary.charCodeAt(i); const blob = new Blob([bytes], { type: match[1] }); const out = await makeAsset(new File([blob], typeof a.name === 'string' ? a.name : 'imported-file', { type: blob.type })); if (a.hash && a.hash !== out.hash)
-    throw new Error('ไฟล์ต้นแบบเปลี่ยนจากข้อมูลที่บันทึกไว้'); return out; } p.audio = await asset(p.audio); for (const c of p.characters) {
+    throw new Error('ไฟล์ต้นแบบเปลี่ยนจากข้อมูลที่บันทึกไว้'); return out; } if (p.locations !== undefined && (!Array.isArray(p.locations) || p.locations.length > 20 || p.locations.some((l: Record<string, unknown>) => !l || typeof l.id !== 'string' || typeof l.name !== 'string' || typeof l.description !== 'string' || typeof l.lighting !== 'string' || typeof l.locked !== 'boolean'))) throw new Error('ข้อมูลสถานที่ไม่ถูกต้อง');
+if (p.concepts !== undefined) p.concepts = parseConcepts({concepts:p.concepts}).map((c, i) => ({...c, id: typeof raw.project.concepts[i].id === 'string' ? raw.project.concepts[i].id : c.id}));
+p.lastRenderSignature = undefined;
+p.audio = await asset(p.audio); for (const c of p.characters) {
     if (typeof c.id !== 'string' || !Array.isArray(c.references) || c.references.length > 4)
         throw new Error('ข้อมูลตัวละครไม่ถูกต้อง');
     c.references = await Promise.all(c.references.map(asset));

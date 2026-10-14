@@ -38,9 +38,9 @@ export async function loginOwner(url:string,password:string,remember:boolean) {
 }
 export async function ownerFetch(path:string,init:RequestInit={}) {
  if(!ownerSession.connected())return Response.json({error:'เข้าสู่ระบบเจ้าของก่อน'}, {status:401});
- if(!/^\/(?:api\/(?:config|story|key|check)|status|jobs(?:\?.*)?)$/.test(path))throw new Error('คำขอหลังบ้านไม่ถูกต้อง');
+ if(!/^\/(?:api\/(?:config|story|concepts|key|check)|status|jobs(?:\?.*)?)$/.test(path))throw new Error('คำขอหลังบ้านไม่ถูกต้อง');
  const headers=new Headers(init.headers);headers.set('Authorization','Bearer '+ownerSession.token());
- const signal=init.signal?AbortSignal.any([init.signal,AbortSignal.timeout(path==='/api/story'?150000:35000)]):AbortSignal.timeout(path==='/api/story'?150000:35000);
+ const signal=init.signal?AbortSignal.any([init.signal,AbortSignal.timeout(['/api/story','/api/concepts'].includes(path)?150000:35000)]):AbortSignal.timeout(['/api/story','/api/concepts'].includes(path)?150000:35000);
  const r=await fetch(ownerSession.endpoint()+path,{...init,headers,signal});
  // 401 on model/provider calls must not log the owner out. The Worker marks owner auth failures explicitly.
  if(r.status===401&&r.headers.get('X-StoryCraft-Session')==='expired')ownerSession.disconnect();

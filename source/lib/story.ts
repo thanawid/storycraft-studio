@@ -17,8 +17,11 @@ export type Character = {
     locked: boolean;
     references: Asset[];
 };
+export type Location = { id: string; name: string; description: string; lighting: string; locked: boolean };
+export type Concept = { id: string; title: string; mood: string; synopsis: string; opening: string; development: string; ending: string };
 export type KlingJob = { external: string; backend: string; status: string; sourceHash: string; createdAt: number; id?: string; videoUrl?: string; message?: string; billing?: string };
 export type Scene = {
+    locationId?: string;
     kling?: KlingJob;
     klingFrame?: Asset;
     id: string;
@@ -51,6 +54,11 @@ export type Project = {
     characters: Character[];
     scenes: Scene[];
     synopsis: string;
+    concepts?: Concept[];
+    selectedConceptId?: string;
+    locations?: Location[];
+    productionScope?: 'storyboard' | 'images' | 'film';
+    lastRenderSignature?: string;
     audio?: Asset;
     waveform: number[];
     updatedAt: number;
@@ -71,16 +79,19 @@ export function timecode(sec: number) { const n = Math.max(0, Math.round(sec)); 
 export function invalidate(project: Project): Project { return { ...project, scenes: project.scenes.map(s => ({ ...s, review: 'pending', checked: [] })), updatedAt: Date.now() }; }
 export function prompts(project: Project, scene: Scene) {
     const cast = project.characters.filter(c => scene.characterIds.includes(c.id)).map(c => `CHARACTER ${c.id}: ${c.name}; role: ${c.role}; ${c.description}; fixed outfit: ${c.outfit}. ORIGINAL REFERENCES: ${c.references.map(r => `${r.name} [SHA256 ${r.hash}]`).join(', ')}`).join('\n');
-    const bible = `${IDENTITY_LOCK}\nCHARACTER BIBLE:\n${cast || 'No visible character faces. Use environment shots only.'}\nSTYLE LOCK: ${project.style}. ${project.styleNotes}. Apply style to environment, lighting, composition; never restyle or redraw the reference face. Aspect ratio ${project.ratio}.`;
+    const location = (project.locations || []).find(l => l.id === scene.locationId);
+    const setting = location ? `LOCATION LOCK: ${location.name}; ${location.description}; lighting: ${location.lighting}. Preserve geography and recurring objects.` : '';
+    const bible = `${IDENTITY_LOCK}\nCHARACTER BIBLE:\n${cast || 'No visible character faces. Use environment shots only.'}\n${setting}\nSTYLE LOCK: ${project.style}. ${project.styleNotes}. Apply style to environment, lighting, composition; never restyle or redraw the reference face. Aspect ratio ${project.ratio}.`;
     return { image: `${bible}\nSHOT: ${scene.title}\n${scene.description}\nCAMERA: ${scene.camera}\n${scene.imagePrompt}\nDo not add text or captions.`, video: `${bible}\nAnimate the approved start frame for ${scene.duration} seconds.\nACTION: ${scene.description}\nCAMERA: ${scene.camera}\nMOTION: ${scene.motion}\n${scene.videoPrompt}\nDIALOGUE: ${project.kind === 'mv' ? 'No dialogue. Keep the original song as the soundtrack.' : scene.dialogue || 'No dialogue.'}\nMaintain identity in every frame.`, negative: NEGATIVE };
 }
-export function exportProblems(p: Project) { const out: string[] = []; if (!p.scenes.length)
+export function exportProblems(p: Project) { const out: string[] = []; if (p.kind === 'mv' && !p.audio) out.push('เพิ่มเพลงต้นฉบับก่อนส่งออก MV'); if (!p.scenes.length)
     out.push('ยังไม่มีช็อต'); if (p.scenes.length && Math.abs(p.scenes.reduce((n, s) => n + s.duration, 0) - p.duration) > 1)
     out.push('ความยาวช็อตรวมไม่ตรงความยาวโปรเจกต์'); if (!p.styleLocked)
     out.push('ยังไม่ได้ล็อกสไตล์ภาพ'); if (p.characters.some(c => !c.locked || !c.references.length))
     out.push('ตัวละครต้องมีภาพต้นแบบและล็อกแล้ว'); for (const [i, s] of p.scenes.entries()) {
     if (s.characterIds.some(id => !p.characters.some(c => c.id === id)))
         out.push(`ช็อต ${i + 1} อ้างอิงตัวละครที่ไม่มีในโปรเจกต์`);
+    if (s.locationId && !(p.locations || []).some(l => l.id === s.locationId && l.locked)) out.push(`ช็อต ${i + 1} ต้องมีสถานที่ที่ล็อกไว้`);
     if (!s.media)
         out.push(`ช็อต ${i + 1} ยังไม่มีภาพหรือคลิป`);
     if (s.review !== 'approved' || !CHECKS.every(c => s.checked.includes(c)))
@@ -93,12 +104,13 @@ export function applyStory(p: Project, value: unknown): Project {
     if (typeof v.synopsis !== 'string' || !Array.isArray(v.scenes) || !v.scenes.length || v.scenes.length > 150)
         throw new Error('สตอรีบอร์ดไม่ครบหรือจำนวนช็อตไม่ถูกต้อง');
     const validIds = new Set(p.characters.map(c => c.id));
+    const validLocations = new Set((p.locations || []).map(l => l.id));
     const scenes = v.scenes.map((item: unknown) => { if (!item || typeof item !== 'object')
         throw new Error('ข้อมูลช็อตไม่ถูกต้อง'); const s = item as Record<string, unknown>; for (const k of ['title', 'section', 'description', 'camera', 'motion', 'dialogue', 'imagePrompt', 'videoPrompt'])
         if (typeof s[k] !== 'string' || (s[k] as string).length > 6000)
             throw new Error(`ข้อมูลช็อต ${k} ไม่ถูกต้อง`); if (typeof s.duration !== 'number' || !Number.isFinite(s.duration) || s.duration <= 0 || s.duration > 60)
         throw new Error('ความยาวช็อตต้องอยู่ระหว่าง 0–60 วินาที'); if (!Array.isArray(s.characterIds) || s.characterIds.some(id => typeof id !== 'string' || !validIds.has(id)))
-        throw new Error('AI เพิ่มตัวละครที่ไม่มีในต้นแบบ กรุณาสร้างใหม่'); return { id: uid(), title: s.title as string, section: s.section as string, description: s.description as string, camera: s.camera as string, motion: s.motion as string, dialogue: s.dialogue as string, imagePrompt: s.imagePrompt as string, videoPrompt: s.videoPrompt as string, duration: s.duration, characterIds: s.characterIds as string[], review: 'pending', checked: [] } as Scene; });
+        throw new Error('AI เพิ่มตัวละครที่ไม่มีในต้นแบบ กรุณาสร้างใหม่'); if (s.locationId && (typeof s.locationId !== 'string' || !validLocations.has(s.locationId))) throw new Error('AI อ้างอิงสถานที่ที่ไม่มีในโปรเจกต์'); return { locationId: (s.locationId || undefined) as string | undefined, id: uid(), title: s.title as string, section: s.section as string, description: s.description as string, camera: s.camera as string, motion: s.motion as string, dialogue: s.dialogue as string, imagePrompt: s.imagePrompt as string, videoPrompt: s.videoPrompt as string, duration: s.duration, characterIds: s.characterIds as string[], review: 'pending', checked: [] } as Scene; });
     const total = scenes.reduce((n, s) => n + s.duration, 0);
     if (Math.abs(total - p.duration) > 1)
         throw new Error(`ระยะเวลาช็อตรวม ${total.toFixed(1)} วินาที ไม่ตรงความยาวโปรเจกต์ ${p.duration} วินาที กรุณาสร้างใหม่`);

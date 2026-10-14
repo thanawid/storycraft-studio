@@ -1,3 +1,4 @@
+import { generateConcepts } from './planning.ts';
 import { DEFAULT_MODEL, generateStory, GeminiServiceError, MAX_INPUT, validateInput } from './gemini.ts';
 import { FREE_MODELS } from './models.ts';
 
@@ -70,13 +71,13 @@ export function createStaticApi(fetcher: typeof fetch = fetch, options: { key?: 
         key = candidate.key; model = candidate.model;
         return json({ connected: true, model, source: 'browser' });
       }
-      if (path !== '/api/story' || request.method !== 'POST') return json({ error: 'ไม่พบคำสั่งนี้' }, 404);
+      if (!['/api/story', '/api/concepts'].includes(path) || request.method !== 'POST') return json({ error: 'ไม่พบคำสั่งนี้' }, 404);
       if (!key) return json({ error: options.server ? 'เพิ่ม GEMINI_API_KEY ใน Cloudflare Secrets ก่อน' : 'เชื่อม Gemini ของคุณก่อน คีย์จะไม่ถูกเก็บหลังรีเฟรชหรือปิดแท็บ' }, options.server ? 503 : 401);
       const form = await request.formData();
       if (form.get('consent') !== 'yes') return json({ error: 'ยืนยันส่งไฟล์ให้ Gemini ก่อนสร้างเรื่อง' }, 400);
       const raw = form.get('project');
       if (typeof raw !== 'string' || raw.length > 90000) return json({ error: 'ข้อมูลโปรเจกต์ไม่ถูกต้องหรือใหญ่เกินไป' }, 400);
-      const p = validateInput(JSON.parse(raw));
+      const p = validateInput(JSON.parse(raw), path === '/api/concepts');
       if (!p.brief.trim() && !p.lyrics.trim() && !form.get('audio')) return json({ error: 'ใส่เรื่องย่อ เนื้อเพลง หรือไฟล์เสียงก่อน' }, 400);
       const expected = new Map<string, { hash: string; name: string }>(p.characters.flatMap(c => c.references.map(r => [`ref-${r.id}`, r] as const)));
       const used = new Set<string>();
@@ -103,6 +104,7 @@ export function createStaticApi(fetcher: typeof fetch = fetch, options: { key?: 
         parts.push({ mimeType: file.type, data: encode(bytes), name: reference ? `CHARACTER REFERENCE ${reference.name}` : file.name });
       }
       if ([...expected.keys()].some(id => !used.has(id))) return json({ error: 'ส่งภาพต้นแบบไม่ครบ กรุณาใช้ต้นแบบเดิมทุกภาพ' }, 400);
+      if (path === '/api/concepts') return json({ concepts: await generateConcepts(p, parts, key, model, fetcher, AbortSignal.any([request.signal, AbortSignal.timeout(150000)])) });
       const result = await generateStory(p, parts, key, model, fetcher, AbortSignal.any([request.signal, AbortSignal.timeout(150000)]));
       return json({ synopsis: result.synopsis, scenes: result.scenes.map(({ id, review, checked, ...scene }) => scene) });
     } catch (error) {
