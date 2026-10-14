@@ -1,4 +1,6 @@
-# StoryCraft Studio 1.5.0 — ตั้งคีย์ครั้งเดียว ใช้ต่อได้
+# StoryCraft Studio — ตั้งคีย์ครั้งเดียว ใช้ต่อได้
+> เว็บ 1.6.0 ใช้ Worker 1.5.0 เดิมได้ หากอัปเดตหลังบ้านรุ่นนั้นแล้ว ให้อัปโหลดเฉพาะ index.html, assets และ storycraft-icon.svg
+
 
 เว็บหลัก: https://thanawid.github.io/storycraft-studio/
 หลังบ้านเดิม: https://storycraft-api.thanawid.workers.dev

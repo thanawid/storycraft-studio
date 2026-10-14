@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import Studio from '../app/page';
+import { StudioGate } from '../components/studio-gate';
 import '../app/studio.css';
 
 class AppBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -13,4 +13,4 @@ class AppBoundary extends Component<{ children: ReactNode }, { failed: boolean }
 }
 
 const root = document.getElementById('root');
-if (root) createRoot(root).render(<AppBoundary><Studio /></AppBoundary>);
+if (root) createRoot(root).render(<AppBoundary><StudioGate /></AppBoundary>);

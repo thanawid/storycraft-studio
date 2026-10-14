@@ -1,8 +1,9 @@
 import { CHECKS, IDENTITY_LOCK, NEGATIVE, type Project, type Scene } from './story.ts';
 import { dataUrl } from './storage.ts';
+import { announceOwnerLogout } from './auth-gate.ts';
 import { loginOwner, ownerSession, ownerFetch } from './owner-session.ts';
 export function klingConnected() { return ownerSession.connected(); }
-export function disconnectKling() { ownerSession.disconnect(); }
+export function disconnectKling() { ownerSession.disconnect(); announceOwnerLogout(); }
 export async function connectKling(url: string, password: string, remember = true) {
  await loginOwner(url,password,remember);
  return ownerSession.endpoint();
